@@ -1,0 +1,2 @@
+io.ghaylan.springboot.security.config.CustomSecurityConfigurer
+io.ghaylan.springboot.security.config.BaseSecurityConfig

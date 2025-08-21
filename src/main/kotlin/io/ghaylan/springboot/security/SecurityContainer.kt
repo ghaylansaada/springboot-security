@@ -182,30 +182,46 @@ open class SecurityContainer<RoleT, PermissionT>(
 
 
     /**
-     * Finds the [SecuritySchema] matching a given HTTP request.
+     * Finds the [SecuritySchema] that applies to the given HTTP request.
      *
-     * Matching strategy:
-     * 1. Exact URI match (fast path).
-     * 2. Fallback to Ant-style pattern matching.
+     * This function extracts the URI path and HTTP method from the [request]
+     * and delegates the lookup to [findByRequest].
      *
      * @param request Incoming HTTP request.
-     * @return Matching [SecuritySchema], or null if no match exists.
+     * @return Matching [SecuritySchema], or null if no matching schema is found.
      */
     fun findByRequest(request : ServerHttpRequest) : SecuritySchema<*, *>?
     {
-        val requestUriPath = request.uri.path
-        val requestMethod = request.method.name()
+        return findByRequest(uri = request.uri.path, method = request.method.name())
+    }
 
+
+    /**
+     * Finds the [SecuritySchema] that matches the specified URI and HTTP method.
+     *
+     * Matching strategy:
+     * 1. Tries an exact URI match with the same HTTP method (fast path).
+     * 2. If no exact match is found, attempts an Ant-style pattern match.
+     *
+     * @param uri The request URI path to match.
+     * @param method The HTTP method to match (e.g., "GET", "POST").
+     * @return Matching [SecuritySchema], or null if no match exists.
+     */
+    fun findByRequest(
+        uri : String,
+        method : String,
+    ) : SecuritySchema<*, *>?
+    {
         // Try exact match first, then pattern match in one pass
         var fallback: SecuritySchema<*, *>? = null
 
         for (schema in schemas)
         {
-            if (schema.method.name() != requestMethod) continue
+            if (schema.method.name() != method) continue
 
-            if (schema.uri == requestUriPath) return schema
+            if (schema.uri == uri) return schema
 
-            if (fallback == null && matcher.match(schema.uri, requestUriPath))
+            if (fallback == null && matcher.match(schema.uri, uri))
             {
                 fallback = schema
             }

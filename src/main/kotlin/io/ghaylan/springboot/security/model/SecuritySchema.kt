@@ -44,7 +44,7 @@ import org.springframework.http.HttpMethod
 data class SecuritySchema<RoleT, PermissionT>(
     val method : HttpMethod,
     val uri : String,
-    val authSchemes : List<AuthScheme>,
+    val authSchemes : Set<AuthScheme>,
     val roles : Set<RoleT>,
     val permissions : Set<PermissionT>,
     val accessScope : RoleAccessScope,

@@ -58,4 +58,4 @@ import io.ghaylan.springboot.security.model.AuthScheme
 @MustBeDocumented
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)
-annotation class AuthorizedEndpoint(val schemes: Array<AuthScheme>)
+annotation class AuthorizedEndpoint(val schemes: Array<AuthScheme> = [AuthScheme.BEARER])

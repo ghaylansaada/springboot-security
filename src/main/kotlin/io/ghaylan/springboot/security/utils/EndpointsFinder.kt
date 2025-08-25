@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestMethod
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.reactive.result.method.annotation.RequestMappingHandlerMapping
+import org.springframework.web.util.pattern.PathPatternParser
 import java.lang.reflect.Method
 import kotlin.collections.ifEmpty
 import kotlin.collections.plus
@@ -64,24 +65,31 @@ object EndpointsFinder
         onMethod : (method : Method, endpoint : Pair<HttpMethod, String>) -> T)
     : List<T>
     {
+        val pathParser = PathPatternParser()
+
         val handlerMapping = appContext.getBean(RequestMappingHandlerMapping::class.java)
 
         val result = ArrayList<T>(handlerMapping.handlerMethods.size)
 
-        for (handlerMethod in handlerMapping.handlerMethods.values)
+        for ((info, handlerMethod) in handlerMapping.handlerMethods)
         {
             val method = handlerMethod.method
             val clazz = method.declaringClass
 
             if (!clazz.isAnnotationPresent(RestController::class.java)) continue
 
-            val endpoints = getEndpoints(clazz, method)
+            val httpMethods = info.methodsCondition.methods
+                .ifEmpty { setOf(RequestMethod.GET) }
 
-            if (endpoints.isEmpty()) continue
+            val patterns = info.patternsCondition.patterns
+                .ifEmpty { setOf(pathParser.parse("/")) }
 
-            for (endpoint in endpoints)
+            for (m in httpMethods)
             {
-                result.add(onMethod(method, endpoint))
+                for (pattern in patterns)
+                {
+                    result.add(onMethod(method, HttpMethod.valueOf(m.name) to pattern.patternString))
+                }
             }
         }
 
@@ -99,7 +107,7 @@ object EndpointsFinder
      * @param method Controller method to inspect
      * @return List of `(HttpMethod, path)` pairs representing resolved endpoints
      */
-    private fun getEndpoints(
+    private fun getMethods(
         clazz: Class<*>,
         method: Method
     ) : List<Pair<HttpMethod, String>>

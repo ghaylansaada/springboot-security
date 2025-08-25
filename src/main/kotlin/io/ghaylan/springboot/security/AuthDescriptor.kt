@@ -1,6 +1,7 @@
 package io.ghaylan.springboot.security
 
 import io.ghaylan.springboot.security.model.GenericAuthentication
+import io.ghaylan.springboot.security.model.SecuritySchema
 import io.ghaylan.springboot.security.model.role.RoleAccessPolicy
 import io.ghaylan.springboot.security.model.role.RoleAccessScope
 import io.ghaylan.springboot.security.resolver.AuthenticationArgumentResolver
@@ -14,7 +15,7 @@ import io.ghaylan.springboot.security.resolver.AuthenticationArgumentResolver
  * It enables you to define:
  * - Your custom authentication type ([AuthT])
  * - Your role enum ([RoleT]) with scoped access rules
- * - Your Permission enum ([PermissionT])
+ * - Your permission enum ([PermissionT])
  *
  * The framework uses this descriptor to handle:
  * - Request authentication
@@ -27,7 +28,8 @@ import io.ghaylan.springboot.security.resolver.AuthenticationArgumentResolver
  * ## Key Responsibilities
  * - **Authentication Conversion:** Converts parsed authentication into your typed [AuthT] using [mapGenericAuth], typically from JWTs or API keys.
  * - **Authorization Resolution:** Extracts security config (allowed roles & permissions) from annotations on methods marked with `@AuthorizedEndpoint`, using [resolveAuthorizationRequirements].
- * - **Role Model Validation:** On initialization, validates that your role strictly follow required scope ([RoleAccessScope]).
+ * - **Role Model Validation:** On initialization, validates that your role enum strictly follows required scopes ([RoleAccessScope]).
+ * - **Schema Extension:** Allows the project to provide additional [SecuritySchema] definitions beyond the default set.
  *
  * ---
  *
@@ -45,6 +47,7 @@ import io.ghaylan.springboot.security.resolver.AuthenticationArgumentResolver
  * The security framework automatically uses your implementation to:
  * - Inject typed authentication parameters into controller methods (via [AuthenticationArgumentResolver])
  * - Validate authorization configuration at startup
+ * - Register additional schemas supplied by the project
  * - Reject misconfigured endpoints or access policies during boot
  *
  * You must expose your implementation as a Spring bean:
@@ -81,6 +84,28 @@ abstract class AuthDescriptor<AuthT, RoleT, PermissionT> where RoleT : Enum<Role
     {
         validateRoleConfiguration()
     }
+
+
+    /**
+     * Provides **additional security schemas** beyond those already defined by the framework.
+     *
+     * ---
+     *
+     * ## Purpose
+     * The security framework automatically generates base [SecuritySchema] definitions
+     * by scanning controller endpoints and annotations.
+     *
+     * Projects may need to define **extra schemas** (e.g., for non-controller endpoints,
+     * infrastructure routes, or custom security rules). This method allows you to supply them.
+     *
+     * ---
+     *
+     * ## Default Behavior
+     * Returns an empty list, meaning no extra schemas are provided.
+     *
+     * @return A list of additional [SecuritySchema] objects to be merged with the framework-defined schemas.
+     */
+    open fun provideAdditionalSchemas(): List<SecuritySchema<RoleT, PermissionT>> = emptyList()
 
 
     /**

@@ -22,14 +22,14 @@ repositories {
 
 dependencies {
     implementation("org.springframework:spring-webflux:6.2.10")
-    api("org.springframework.security:spring-security-web:6.5.2")
-    api("org.springframework.security:spring-security-config:6.5.2")
-    implementation("org.springframework.boot:spring-boot-autoconfigure:3.5.4")
-    implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive:3.5.3")
+    api("org.springframework.security:spring-security-web:6.5.3")
+    api("org.springframework.security:spring-security-config:6.5.3")
+    implementation("org.springframework.boot:spring-boot-autoconfigure:3.5.5")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive:3.5.5")
 
-    implementation("io.jsonwebtoken:jjwt-api:0.12.7")
-    implementation("io.jsonwebtoken:jjwt-impl:0.12.7")
-    implementation("io.jsonwebtoken:jjwt-jackson:0.12.7")
+    implementation("io.jsonwebtoken:jjwt-api:0.13.0")
+    implementation("io.jsonwebtoken:jjwt-impl:0.13.0")
+    implementation("io.jsonwebtoken:jjwt-jackson:0.13.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.10.2")
 }

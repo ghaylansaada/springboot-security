@@ -61,10 +61,23 @@ open class SecurityContainer<RoleT, PermissionT>(
     @PostConstruct
     private fun initialize()
     {
-        val specs = EndpointsFinder.find(appContext) { method, endpoint ->
-            getSecuritySpecs(method = method, httpMethod = endpoint.first, uri = endpoint.second)
+        val predefinedSchema = authDescriptor.provideAdditionalSchemas()
+
+        _schemas.addAll(predefinedSchema)
+
+         EndpointsFinder.find(appContext) { method, endpoint ->
+
+             if (predefinedSchema.any { it.method == endpoint.first && matcher.match(it.uri, endpoint.second) })
+             {
+                 return@find
+             }
+
+             getSecuritySpecs(
+                 method = method,
+                 httpMethod = endpoint.first,
+                 uri = endpoint.second
+             ).apply { _schemas.add(this) }
         }
-        _schemas.addAll(specs)
 
         logger.info("SecuritySchemaCache built with ${_schemas.size} secured endpoints")
 
@@ -85,7 +98,6 @@ open class SecurityContainer<RoleT, PermissionT>(
      *
      * @throws IllegalStateException If annotations are missing, duplicated, or misconfigured.
      */
-
     private fun getSecuritySpecs(
         method : Method,
         httpMethod : HttpMethod,
@@ -104,7 +116,7 @@ open class SecurityContainer<RoleT, PermissionT>(
             publicEndpointAnnotation
         ).size
 
-        val methodSignature = "${method.declaringClass.name}#${method.name}"
+        val methodSignature = "${method.declaringClass.name}#${method.name} -> $httpMethod $uri"
 
         require(totalAnnotations == 1) {
             "Invalid configuration: $methodSignature must be annotated with exactly ONE of @PublicEndpoint, @InternalEndpoint, or @AuthorizedEndpoint. Found $totalAnnotations."
@@ -121,7 +133,7 @@ open class SecurityContainer<RoleT, PermissionT>(
             return SecuritySchema(
                 method = httpMethod,
                 uri = uri,
-                authSchemes = listOf(AuthScheme.BEARER),
+                authSchemes = setOf(AuthScheme.BEARER),
                 permissions = emptySet(),
                 roles = setOf(roleInternal),
                 accessScope = RoleAccessScope.INTERNAL,
@@ -139,7 +151,7 @@ open class SecurityContainer<RoleT, PermissionT>(
             return SecuritySchema(
                 method = httpMethod,
                 uri = uri,
-                authSchemes = emptyList(),
+                authSchemes = setOf(),
                 permissions = emptySet(),
                 roles = setOf(rolePublic),
                 accessScope = RoleAccessScope.PUBLIC,
@@ -155,7 +167,7 @@ open class SecurityContainer<RoleT, PermissionT>(
             val authorizationSpecs = SecuritySchema<RoleT, PermissionT>(
                 method = httpMethod,
                 uri = uri,
-                authSchemes = authorizedEndpoint.schemes.toList(),
+                authSchemes = authorizedEndpoint.schemes.toSet(),
                 permissions = emptySet(),
                 roles = authDescriptor.allRoles.filter { it.scope == RoleAccessScope.SECURED }.toSet(),
                 accessScope = RoleAccessScope.SECURED,

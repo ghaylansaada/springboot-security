@@ -9,10 +9,12 @@ import io.ghaylan.springboot.security.extractor.HmacAuthExtractor
 import io.ghaylan.springboot.security.filter.AccessDeniedHandler
 import io.ghaylan.springboot.security.filter.AuthenticationEntryPoint
 import io.ghaylan.springboot.security.filter.AuthenticationFilter
-import io.ghaylan.springboot.security.ratelimit.RateLimitManager
+import io.ghaylan.springboot.security.model.AuthScheme
+import io.ghaylan.springboot.security.ratelimit.AccessControlManager
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder
 import org.springframework.security.config.web.server.ServerHttpSecurity
@@ -94,20 +96,20 @@ open class BaseSecurityConfig
      * @param basicAuthExtractor Optional Basic authentication handler
      * @param bearerAuthExtractor Optional Bearer token authentication handler
      * @param hmacAuthExtractor Optional HMAC signature authentication handler
-     * @param rateLimitManager Optional rate limiting and throttling manager
+     * @param accessControlManager Optional rate limiting and throttling manager
      * @return Configured SecurityContainer with available authentication methods
      * @throws IllegalArgumentException if no authentication extractors are available
      */
     @Bean
     open fun securityContainer(
         appContext: ApplicationContext,
-        authDescriptor: AuthDescriptor<*, *, *>,
+        authDescriptor: AuthDescriptor<*,*,*,*>,
         apiKeyAuthExtractor : Optional<ApiKeyAuthExtractor>,
         basicAuthExtractor : Optional<BasicAuthExtractor>,
         bearerAuthExtractor : Optional<BearerAuthExtractor>,
         hmacAuthExtractor : Optional<HmacAuthExtractor>,
-        rateLimitManager: Optional<RateLimitManager>
-    ) : SecurityContainer<*, *>
+        accessControlManager: AccessControlManager
+    ) : SecurityContainer<*,*,*>
     {
         val authExtractors = listOfNotNull(
             apiKeyAuthExtractor.getOrNull(),
@@ -123,9 +125,12 @@ open class BaseSecurityConfig
             appContext = appContext,
             authDescriptor = authDescriptor,
             authExtractors = authExtractors,
-            rateLimitManager = rateLimitManager.orElse(null))
+            accessControlManager = accessControlManager)
     }
 
+
+    @Bean
+    open fun accessControlManager(redisTemplate: ReactiveStringRedisTemplate) = AccessControlManager(redisTemplate)
 
     /**
      * Creates the main authentication filter for request processing.
@@ -138,7 +143,7 @@ open class BaseSecurityConfig
      */
     @Bean
     open fun authenticationFilter(
-        securityContainer: SecurityContainer<*, *>
+        securityContainer: SecurityContainer<*,*,*>
     ) : AuthenticationFilter = AuthenticationFilter(securityContainer)
 
 
@@ -178,7 +183,7 @@ open class BaseSecurityConfig
         authFilter: AuthenticationFilter,
         entryPoint: AuthenticationEntryPoint,
         accessDeniedHandler: AccessDeniedHandler,
-        securityContainer: SecurityContainer<*, *>
+        securityContainer: SecurityContainer<*,*,*>
     ) : SecurityWebFilterChain
     {
         return http

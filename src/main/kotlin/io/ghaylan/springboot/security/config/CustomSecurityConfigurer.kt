@@ -41,7 +41,7 @@ import org.springframework.web.reactive.result.method.annotation.ArgumentResolve
 @AutoConfiguration
 @ConditionalOnBean(AuthDescriptor::class)
 open class CustomSecurityConfigurer(
-    private val authDescriptor : AuthDescriptor<*, *, *>
+    private val authDescriptor : AuthDescriptor<*,*,*,*>
 ) : WebFluxConfigurer
 {
 

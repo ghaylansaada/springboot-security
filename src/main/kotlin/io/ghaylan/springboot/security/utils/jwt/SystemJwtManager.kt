@@ -4,6 +4,7 @@ import io.ghaylan.springboot.security.exception.HttpStatusCode
 import io.ghaylan.springboot.security.exception.SecurityViolationException
 import io.ghaylan.springboot.security.extractor.RawExtractedAuth
 import io.ghaylan.springboot.security.model.role.RoleAccessPolicy
+import io.ghaylan.springboot.security.model.token.TokenAccessPolicy
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.time.Instant
@@ -39,12 +40,13 @@ import java.time.Instant
  * @property internalRole The internal role assigned to system tokens.
  * @property currentServiceName The name of the service issuing tokens.
  */
-class SystemJwtManager<RoleT>(
+class SystemJwtManager<RoleT, TokenT>(
 	publicKey : PublicKey,
 	private val privateKey : PrivateKey,
 	private val internalRole : RoleT,
+    private val internalSubject: TokenT,
 	private val currentServiceName : String,
-)  where RoleT: Enum<RoleT>, RoleT : RoleAccessPolicy
+)  where RoleT: Enum<RoleT>, RoleT : RoleAccessPolicy, TokenT: Enum<TokenT>, TokenT : TokenAccessPolicy
 {
 	private val jwtParser = JwtUtils.getParser(publicKey)
 	private val delimiter : String = "::"
@@ -74,15 +76,19 @@ class SystemJwtManager<RoleT>(
 		// Set expiration to 2 minutes from now
 		val expiration = Instant.now().plusSeconds(120)
 
-        val audience = "$destinationServiceName$delimiter$method$delimiter$uri"
+        val audience = buildAudience(
+            serviceName = destinationServiceName,
+            requestMethod = method,
+            requestUri = uri)
 		
 		// Build and sign the JWT
 		return JwtBuilder.builder(
+            subject = internalSubject,
 			userId = "system",
 			userRole = internalRole,
 			userPermissions = emptyList(),
             issuer = currentServiceName,
-            audience = audience,
+            audience = setOf(audience),
             expiration = expiration
         ).build(privateKey)
 	}
@@ -112,7 +118,10 @@ class SystemJwtManager<RoleT>(
 	{
 		val claims = jwtParser.parseSignedClaims(jwt)?.payload ?: return null
 
-        val currentAudience = "$currentServiceName$delimiter$requestMethod$delimiter$requestUri"
+        val currentAudience = buildAudience(
+            serviceName = currentServiceName,
+            requestMethod = requestMethod,
+            requestUri = requestUri)
 
         if (!claims.audience.contains(currentAudience)) {
             throw SecurityViolationException(HttpStatusCode.UNAUTHORIZED, "Authentication failed: invalid audience for internal JWT.")
@@ -122,7 +131,15 @@ class SystemJwtManager<RoleT>(
 			id = claims[JwtUtils.KEY_USER_ID]?.toString() ?: return null,
 			role = claims[JwtUtils.KEY_USER_ROLE]?.toString() ?: return null,
 			name = claims[JwtUtils.KEY_USER_NAME]?.toString(),
+            tokenType = claims.subject,
 			permissions = null,
 			credentials = null)
 	}
+
+
+    private fun buildAudience(
+        serviceName: String,
+        requestMethod: String,
+        requestUri: String,
+    ): String = "$serviceName$delimiter$requestMethod$delimiter$requestUri"
 }

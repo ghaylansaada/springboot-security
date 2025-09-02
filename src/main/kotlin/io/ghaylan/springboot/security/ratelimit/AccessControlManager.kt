@@ -59,8 +59,10 @@ import java.time.Instant
  * ---
  * @property redisTemplate Reactive Redis template for data operations
  */
-class RateLimitManager(private val redisTemplate : ReactiveStringRedisTemplate)
+class AccessControlManager(private val redisTemplate : ReactiveStringRedisTemplate)
 {
+    private val valueOps = redisTemplate.opsForValue()
+
 	companion object
 	{
 		private const val PREFIX_AUTH = "revoked_auth"
@@ -99,7 +101,7 @@ class RateLimitManager(private val redisTemplate : ReactiveStringRedisTemplate)
      *         `false` if it is still under the limit.
      */
     suspend fun isMaxAttemptsReachedByIp(
-        securitySchema : SecuritySchema<*, *>,
+        securitySchema : SecuritySchema<*,*,*>,
         ipAddress : String,
     ) : Boolean
     {
@@ -129,7 +131,7 @@ class RateLimitManager(private val redisTemplate : ReactiveStringRedisTemplate)
      * @return `true` if the shared quota has been exhausted, otherwise `false`.
      */
     suspend fun isMaxAttemptsReachedForAll(
-        securitySchema : SecuritySchema<*, *>
+        securitySchema : SecuritySchema<*,*,*>
     ) : Boolean
     {
         val key : String = buildKeyForRateLimit(
@@ -160,7 +162,7 @@ class RateLimitManager(private val redisTemplate : ReactiveStringRedisTemplate)
      *         otherwise `false`.
      */
     suspend fun isMaxAttemptsReachedByUser(
-        securitySchema : SecuritySchema<*, *>,
+        securitySchema : SecuritySchema<*,*,*>,
         userId : String
     ) : Boolean
     {
@@ -193,7 +195,7 @@ class RateLimitManager(private val redisTemplate : ReactiveStringRedisTemplate)
      * @return `true` if the rate limit has been exceeded, `false` otherwise.
      */
     private suspend fun isMaxAttemptsReached(
-        securitySchema : SecuritySchema<*, *>,
+        securitySchema : SecuritySchema<*,*,*>,
         key : String
     ) : Boolean
     {
@@ -230,13 +232,13 @@ class RateLimitManager(private val redisTemplate : ReactiveStringRedisTemplate)
      * - Invalidating tokens after password change or reset.
      * - Blocking a compromised token without disabling the entire user account.
      *
-     * @param auth Authorization token (e.g., JWT, API key) to revoke.
+     * @param authorization Authorization token (e.g., JWT, API key) to revoke.
      */
-	suspend fun revokeAuth(auth : String)
+	suspend fun revokeAuthorization(authorization : String?, duration: Duration = SESSION_REVOCATION_DURATION)
 	{
-		redisTemplate.opsForValue()
-            .set("$PREFIX_AUTH::$auth", "1", SESSION_REVOCATION_DURATION)
-            .awaitFirstOrNull()
+        authorization ?: return
+
+        valueOps.set("$PREFIX_AUTH::$authorization", "1", duration).awaitFirstOrNull()
 	}
 
 
@@ -252,15 +254,12 @@ class RateLimitManager(private val redisTemplate : ReactiveStringRedisTemplate)
      * - Fraud or abuse mitigation.
      * - Emergency lockouts.
      *
-     * @param ids One or more user identifiers to revoke.
+     * @param id The user identifier to revoke.
      */
-	suspend fun revokeUserId(vararg ids : String)
+	suspend fun revokeUserId(id: String, duration: Duration = SESSION_REVOCATION_DURATION)
 	{
-        val ops = redisTemplate.opsForValue()
-
-        for (id in ids) {
-            ops.set("$PREFIX_USER::$id", "1", SESSION_REVOCATION_DURATION).awaitFirstOrNull()
-        }
+        valueOps.set("$PREFIX_USER::$id", "1", duration)
+            .awaitFirstOrNull()
 	}
 
 
@@ -289,7 +288,7 @@ class RateLimitManager(private val redisTemplate : ReactiveStringRedisTemplate)
 			if (!token.isNullOrBlank()) add("$PREFIX_AUTH::$token")
 		}.ifEmpty { return false }
 
-		val values = redisTemplate.opsForValue()
+		val values = valueOps
             .multiGet(keysToCheck)
             .awaitFirstOrNull()
 

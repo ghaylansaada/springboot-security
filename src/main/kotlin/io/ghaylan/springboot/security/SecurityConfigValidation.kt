@@ -5,7 +5,7 @@ import io.ghaylan.springboot.security.extractor.BasicAuthExtractor
 import io.ghaylan.springboot.security.extractor.BearerAuthExtractor
 import io.ghaylan.springboot.security.extractor.HmacAuthExtractor
 import io.ghaylan.springboot.security.model.AuthScheme
-import io.ghaylan.springboot.security.ratelimit.RateLimitManager
+import io.ghaylan.springboot.security.ratelimit.AccessControlManager
 import io.ghaylan.springboot.security.utils.apikey.ApiKeyManager
 import io.ghaylan.springboot.security.utils.hmac.HmacManager
 import io.ghaylan.springboot.security.utils.jwt.UserJwtReader
@@ -21,7 +21,7 @@ import org.springframework.context.ApplicationContext
  * issues early.
  *
  * ## Validation Rules
- * - **Rate Limiting**: If rate limiting is enabled, [RateLimitManager] must be available
+ * - **Rate Limiting**: If rate limiting is enabled, [AccessControlManager] must be available
  * - **Feign Clients**: If Feign clients are used, [SystemJwtManager] must be available
  * - **Bearer Authentication**: Requires [UserJwtReader], [SystemJwtManager], and [BearerAuthExtractor]
  * - **API Key Authentication**: Requires [ApiKeyManager] and [ApiKeyAuthExtractor]
@@ -47,15 +47,9 @@ object SecurityConfigValidation
      * @param securityContainer The security container with configuration information
      * @throws IllegalArgumentException if required beans are missing
      */
-    fun validateRequiredBeans(appContext: ApplicationContext, securityContainer: SecurityContainer<*, *>)
+    fun validateRequiredBeans(appContext: ApplicationContext, securityContainer: SecurityContainer<*,*,*>)
     {
-        // Validate rate limiting configuration
-        if (securityContainer.hasRateLimiter())
-        {
-            validateBeanExists<RateLimitManager>(appContext, "Rate limiting is enabled, but ${RateLimitManager::class.java.simpleName} is not available")
-        }
-
-        validateBeanExists<SystemJwtManager<*>>(appContext, "${SystemJwtManager::class.java.simpleName} is not available")
+        validateBeanExists<SystemJwtManager<*,*>>(appContext, "${SystemJwtManager::class.java.simpleName} is not available")
 
         // Validate authentication scheme configurations
         val usedSchemes = securityContainer.collectUsedSecuritySchemes()
@@ -75,7 +69,7 @@ object SecurityConfigValidation
         if (usedSchemes.contains(AuthScheme.BEARER))
         {
             validateBeanExists<UserJwtReader>(appContext, "Bearer authentication is used, but ${UserJwtReader::class.java.simpleName} is not available")
-            validateBeanExists<SystemJwtManager<*>>(appContext, "Bearer authentication is used, but ${SystemJwtManager::class.java.simpleName} is not available")
+            validateBeanExists<SystemJwtManager<*,*>>(appContext, "Bearer authentication is used, but ${SystemJwtManager::class.java.simpleName} is not available")
             validateBeanExists<BearerAuthExtractor>(appContext, "Bearer authentication is used, but ${BearerAuthExtractor::class.java.simpleName} is not available")
         }
 

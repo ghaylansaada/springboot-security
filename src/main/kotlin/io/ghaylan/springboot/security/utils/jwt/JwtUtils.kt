@@ -37,7 +37,7 @@ object JwtUtils
     const val KEY_USER_ROLE: String = "urole"
 
     /** Claim key for user role */
-    const val KEY_USER_PERMISSIONS: String = "uper"
+    const val KEY_USER_PERMISSIONS: String = "uperm"
 
     /** Claim key for user display name */
     const val KEY_USER_NAME: String = "uname"

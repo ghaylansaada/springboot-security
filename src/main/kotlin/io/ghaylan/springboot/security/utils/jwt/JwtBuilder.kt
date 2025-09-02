@@ -1,6 +1,7 @@
 package io.ghaylan.springboot.security.utils.jwt
 
 import io.ghaylan.springboot.security.model.role.RoleAccessPolicy
+import io.ghaylan.springboot.security.model.token.TokenAccessPolicy
 import io.jsonwebtoken.JwtBuilder
 import io.jsonwebtoken.Jwts
 import java.security.PrivateKey
@@ -49,20 +50,22 @@ class JwtBuilder private constructor(private val builder : JwtBuilder)
          * ## Usage Example
          * ```kotlin
          * val jwt = builder(
+         *     subject = TokenType.ACCESS,
          *     userId = "user123",
          *     userRole = MyRole.ADMIN,
          *     userPermissions = listOf(MyPermission.READ, MyPermission.WRITE),
          *     issuer = "my-app",
-         *     audience = "my-app-users",
+         *     audience = setOf("my-app-users"),
          *     expiration = Instant.now().plus(1, ChronoUnit.HOURS)
          * ).compact()
          * ```
          *
          * ## Generic Parameters
          * - `RoleT` – Enum type implementing [RoleAccessPolicy], representing the user's role
+         * - `TokenT` – Enum type implementing [TokenAccessPolicy], representing the token type
          * - `PermissionT` – Enum type representing the user's permissions
          *
-         * ## Parameters
+         * @param subject The token type (e.g., access, refresh)
          * @param userId Unique identifier of the user for whom the JWT is issued
          * @param userRole Role of the user, implementing [RoleAccessPolicy]
          * @param userPermissions List of user permissions (fine-grained access control)
@@ -72,25 +75,30 @@ class JwtBuilder private constructor(private val builder : JwtBuilder)
          *
          * @return A configured [JwtBuilder] instance ready to build a signed JWT.
          */
-		fun <RoleT, PermissionT> builder(
+		fun <RoleT, TokenT, PermissionT> builder(
+            subject: TokenT,
 			userId : String,
 			userRole : RoleT,
             userPermissions : List<PermissionT>,
             issuer : String,
-            audience : String,
+            audience : Set<String>,
             expiration : Instant
-		) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder where RoleT: Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT: Enum<PermissionT>
+		) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder where
+                RoleT: Enum<RoleT>, RoleT : RoleAccessPolicy,
+                TokenT : Enum<TokenT>, TokenT : TokenAccessPolicy,
+                PermissionT: Enum<PermissionT>
 		{
 			val builder = Jwts.builder()
 				.claim(JwtUtils.KEY_USER_ID, userId)
 				.claim(JwtUtils.KEY_USER_ROLE, userRole.name)
 				.claim(JwtUtils.KEY_USER_PERMISSIONS, userPermissions.map { it.name })
+                .subject(subject.name)
+                .issuer(issuer)
+                .audience().add(audience).and()
 				.issuedAt(Date())
+                .expiration(Date.from(expiration))
 			
 			return JwtBuilder(builder)
-                .setIssuer(issuer)
-                .addAudience(audience)
-                .setExpiration(expiration)
 		}
 	}
 
@@ -110,80 +118,6 @@ class JwtBuilder private constructor(private val builder : JwtBuilder)
 
 
     /**
-     * Sets the expiration time (exp claim) for the JWT.
-     *
-     * @param value The [Instant] representing the token's expiration, or null to skip setting.
-     * @return This [JwtBuilder] for method chaining.
-     */
-	fun setExpiration(value : Instant?) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder
-	{
-		value ?: return this
-		
-		builder.expiration(Date.from(value))
-		
-		return this
-	}
-
-
-    /**
-     * Sets the subject (sub claim) for the JWT.
-     *
-     * @param value The subject identifying the JWT.
-     * @return This [JwtBuilder] for method chaining.
-     */
-	fun setSubject(value : String) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder
-	{
-		builder.subject(value)
-
-		return this
-	}
-
-
-    /**
-     * Sets the issuer (iss claim) of the JWT.
-     *
-     * @param value The entity that generated the token.
-     * @return This [JwtBuilder] for method chaining.
-     */
-	fun setIssuer(value : String) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder
-	{
-		builder.issuer(value)
-
-		return this
-	}
-
-
-    /**
-     * Adds a string value to the audience (aud claim) of the JWT.
-     *
-     * Audience can represent the intended service or request target for this token.
-     *
-     * @param value A single audience entry.
-     * @return This [JwtBuilder] for method chaining.
-     */
-    fun addAudience(value : String) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder
-    {
-        builder.audience().add(value)
-
-        return this
-    }
-
-
-    /**
-     * Adds multiple values to the audience (aud claim) of the JWT.
-     *
-     * @param value A set of audience entries.
-     * @return This [JwtBuilder] for method chaining.
-     */
-    fun addAudience(value : Set<String>) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder
-    {
-        builder.audience().add(value)
-
-        return this
-    }
-
-
-    /**
      * Sets a custom claim under a specified key.
      *
      * @param key The claim name.
@@ -193,9 +127,34 @@ class JwtBuilder private constructor(private val builder : JwtBuilder)
 	fun setClaim(key : String, value : Any) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder
 	{
 		builder.claim(key, value)
-
 		return this
 	}
+
+
+    /**
+     * Sets multiple custom claims using a builder-style lambda.
+     *
+     * @param claimsBuilder A lambda with receiver on [HashMap] to define claims.
+     * @return This [JwtBuilder] for method chaining.
+     */
+    fun setClaims(claimsBuilder : HashMap<String, Any?>.() -> Unit) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder
+    {
+        val claims = HashMap<String, Any?>().apply(claimsBuilder)
+        return setClaims(claims)
+    }
+
+
+    /**
+     * Sets multiple custom claims at once.
+     *
+     * @param claims A map containing claim names and their corresponding values. Values can be null.
+     * @return This [JwtBuilder] for method chaining.
+     */
+    fun setClaims(claims : Map<String, Any?>) : io.ghaylan.springboot.security.utils.jwt.JwtBuilder
+    {
+        builder.claims(claims)
+        return this
+    }
 
 
     /**

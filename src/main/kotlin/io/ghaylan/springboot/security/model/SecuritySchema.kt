@@ -5,6 +5,7 @@ import io.ghaylan.springboot.security.filter.AuthenticationFilter
 import io.ghaylan.springboot.security.ratelimit.RateLimited
 import io.ghaylan.springboot.security.model.role.RoleAccessPolicy
 import io.ghaylan.springboot.security.model.role.RoleAccessScope
+import io.ghaylan.springboot.security.model.token.TokenAccessPolicy
 import org.springframework.http.HttpMethod
 
 /**
@@ -35,18 +36,19 @@ import org.springframework.http.HttpMethod
  *
  * @property method HTTP method (GET, POST, PUT, DELETE, etc.) for endpoint matching
  * @property uri URI pattern for endpoint identification, supports path variables and wildcards
- * @property authSchemes List of supported authentication schemes (Bearer, Basic, HMAC, ApiKey)
+ * @property authScheme Supported authentication schemes (Bearer, Basic, HMAC, ApiKey)
  * @property roles List of roles authorized to access this endpoint
  * @property permissions Required permissions for authentication, null if no specific type required
  * @property accessScope Access scope determining authentication level (PUBLIC/INTERNAL/SECURED)
  * @property rateLimit Rate limiting configuration, null if no rate limiting applied
  */
-data class SecuritySchema<RoleT, PermissionT>(
+data class SecuritySchema<RoleT, PermissionT, TokenT>(
     val method : HttpMethod,
     val uri : String,
-    val authSchemes : Set<AuthScheme>,
+    val authScheme : AuthScheme,
     val roles : Set<RoleT>,
     val permissions : Set<PermissionT>,
+    val tokenType : TokenT,
     val accessScope : RoleAccessScope,
     val rateLimit : RateLimited?,
-) where RoleT: Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT: Enum<PermissionT>
+) where RoleT: Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT: Enum<PermissionT>, TokenT: Enum<TokenT>, TokenT : TokenAccessPolicy

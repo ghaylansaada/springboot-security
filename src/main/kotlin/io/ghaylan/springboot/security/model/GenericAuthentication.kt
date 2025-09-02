@@ -1,6 +1,7 @@
 package io.ghaylan.springboot.security.model
 
 import io.ghaylan.springboot.security.model.role.RoleAccessPolicy
+import io.ghaylan.springboot.security.model.token.TokenAccessPolicy
 import java.time.Instant
 import java.util.Locale
 
@@ -36,14 +37,15 @@ import java.util.Locale
  * @property userAgent Optional user agent string from the client.
  * @property datetime Timestamp when authentication was processed.
  */
-open class GenericAuthentication<RoleT, PermissionT, UserT : GenericAuthentication.User<RoleT, PermissionT>>(
+open class GenericAuthentication<RoleT, PermissionT, TokenT, UserT: GenericAuthentication.User<String, String, RoleT, PermissionT>>(
     val user: UserT,
+    val tokenType: TokenT,
     val locale: Locale,
     val header: HeaderInfo,
     val ipAddress: String,
     val userAgent: String?,
     val datetime: Instant
-) where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>
+) where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>, TokenT : Enum<TokenT>, TokenT : TokenAccessPolicy
 {
 
     /**
@@ -56,9 +58,9 @@ open class GenericAuthentication<RoleT, PermissionT, UserT : GenericAuthenticati
      * @property role User's assigned role for authorization checks.
      * @property permissions User's assigned permissions for authorization checks.
      */
-    open class User<RoleT, PermissionT>(
-        val id: String,
-        val name: String?,
+    open class User<IdT, NameT, RoleT, PermissionT>(
+        val id: IdT,
+        val name: NameT?,
         val role: RoleT,
         val permissions: Set<PermissionT>,
     ) : HashMap<String, Any?>() where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>

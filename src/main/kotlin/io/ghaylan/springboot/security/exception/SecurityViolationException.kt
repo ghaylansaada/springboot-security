@@ -37,8 +37,10 @@ class SecurityViolationException(
  */
 enum class HttpStatusCode(val status : HttpStatus, val message : String)
 {
+    INVALID_TOKEN(status = HttpStatus.FORBIDDEN, "Access denied: Token type not allowed here."),
+
     /** Access denied due to insufficient roles or permissions. Returns HTTP 403 Forbidden. */
-    FORBIDDEN(status = HttpStatus.FORBIDDEN, "Access denied: You do not have the required role to access this endpoint"),
+    FORBIDDEN(status = HttpStatus.FORBIDDEN, "Access denied: You do not have the required role to access this endpoint."),
 
     /** Authentication failure due to missing or invalid credentials. Returns HTTP 401 Unauthorized. */
     UNAUTHORIZED(status = HttpStatus.UNAUTHORIZED, "Authentication failed: invalid or missing credentials."),

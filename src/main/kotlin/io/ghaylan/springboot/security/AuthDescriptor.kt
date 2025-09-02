@@ -4,7 +4,10 @@ import io.ghaylan.springboot.security.model.GenericAuthentication
 import io.ghaylan.springboot.security.model.SecuritySchema
 import io.ghaylan.springboot.security.model.role.RoleAccessPolicy
 import io.ghaylan.springboot.security.model.role.RoleAccessScope
+import io.ghaylan.springboot.security.model.token.TokenAccessPolicy
+import io.ghaylan.springboot.security.model.token.TokenAccessScope
 import io.ghaylan.springboot.security.resolver.AuthenticationArgumentResolver
+import org.springframework.http.HttpMethod
 
 /**
  * Core contract for integrating project-specific authentication and authorization logic.
@@ -63,10 +66,17 @@ import io.ghaylan.springboot.security.resolver.AuthenticationArgumentResolver
  * @param RoleT The enum type representing user roles, implementing [RoleAccessPolicy]
  * @param PermissionT The enum type representing permissions.
  */
-abstract class AuthDescriptor<AuthT, RoleT, PermissionT> where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>
+abstract class AuthDescriptor<AuthT, RoleT, PermissionT, TokenT>
+        where PermissionT : Enum<PermissionT>,
+              RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy,
+              TokenT : Enum<TokenT>, TokenT : TokenAccessPolicy
+
 {
     /** Role enum class declared by the project (used for validation and introspection). */
     abstract val roleClass: Class<RoleT>
+
+    /** Token type enum class declared by the project (used for validation and introspection). */
+    abstract val tokenClass: Class<TokenT>
 
     /** Permission enum class declared by the project (used for validation and introspection). */
     abstract val permissionClass: Class<PermissionT>
@@ -74,6 +84,10 @@ abstract class AuthDescriptor<AuthT, RoleT, PermissionT> where RoleT : Enum<Role
     /** All role enum constants declared in the project. */
     val allRoles: Array<RoleT> = roleClass.enumConstants
         ?: error("Role enum constants are null for ${roleClass.simpleName}")
+
+    /** All token type enum constants declared in the project. */
+    val allTokens: Array<TokenT> = tokenClass.enumConstants
+        ?: error("Token enum constants are null for ${tokenClass.simpleName}")
 
     /** All permission enum constants declared in the project. */
     val allPermissions: Array<PermissionT> = permissionClass.enumConstants
@@ -83,29 +97,8 @@ abstract class AuthDescriptor<AuthT, RoleT, PermissionT> where RoleT : Enum<Role
     init
     {
         validateRoleConfiguration()
+        validateTokenConfiguration()
     }
-
-
-    /**
-     * Provides **additional security schemas** beyond those already defined by the framework.
-     *
-     * ---
-     *
-     * ## Purpose
-     * The security framework automatically generates base [SecuritySchema] definitions
-     * by scanning controller endpoints and annotations.
-     *
-     * Projects may need to define **extra schemas** (e.g., for non-controller endpoints,
-     * infrastructure routes, or custom security rules). This method allows you to supply them.
-     *
-     * ---
-     *
-     * ## Default Behavior
-     * Returns an empty list, meaning no extra schemas are provided.
-     *
-     * @return A list of additional [SecuritySchema] objects to be merged with the framework-defined schemas.
-     */
-    open fun provideAdditionalSchemas(): List<SecuritySchema<RoleT, PermissionT>> = emptyList()
 
 
     /**
@@ -137,7 +130,7 @@ abstract class AuthDescriptor<AuthT, RoleT, PermissionT> where RoleT : Enum<Role
      * @param genericAuth The raw authentication object parsed from the request
      * @return A fully typed authentication object specific to your application ([AuthT])
      */
-    abstract fun mapGenericAuth(genericAuth: GenericAuthentication<*, *, *>): AuthT
+    abstract fun mapGenericAuth(genericAuth: GenericAuthentication<*,*,*,*>): AuthT
 
 
     /**
@@ -165,7 +158,11 @@ abstract class AuthDescriptor<AuthT, RoleT, PermissionT> where RoleT : Enum<Role
      * @param annotations The array of method-level annotations present on the controller endpoint
      * @return A [Pair] of the allowed roles & permissions.
      */
-    abstract fun resolveAuthorizationRequirements(annotations: Array<Annotation>): Pair<Set<PermissionT>, Set<RoleT>>
+    abstract fun resolveAuthorizationRequirements(
+        annotations: Array<Annotation>,
+        httpMethod: HttpMethod,
+        uri: String,
+    ): SecuritySchema<RoleT, PermissionT, TokenT>
 
 
     /**
@@ -198,6 +195,40 @@ abstract class AuthDescriptor<AuthT, RoleT, PermissionT> where RoleT : Enum<Role
         val securedRoles = allRoles.count { it.scope == RoleAccessScope.SECURED }
         require(securedRoles >= 1) {
             "At least one SECURED role is required, but found $securedRoles in ${roleClass.simpleName}"
+        }
+    }
+
+
+    /**
+     * Validates that the project's token types enum defines a compliant access model.
+     *
+     * This method is automatically invoked on instantiation and enforces:
+     * - Exactly **one** token with [TokenAccessScope.INTERNAL]
+     * - Exactly **one** token with [TokenAccessScope.REFRESH]
+     * - At least **one** token with [TokenAccessScope.ACCESS]
+     *
+     * ---
+     *
+     * These constraints ensure that the application has a clear and reliable access control model.
+     * If they are not met, application startup will fail with a detailed exception.
+     *
+     * @throws IllegalArgumentException If the declared token scopes violate the access model
+     */
+    private fun validateTokenConfiguration()
+    {
+        val internalTokens = allTokens.count { it.scope == TokenAccessScope.INTERNAL }
+        require(internalTokens == 1) {
+            "Exactly one INTERNAL token type is required, but found $internalTokens in ${tokenClass.simpleName}"
+        }
+
+        val refreshToken = allTokens.count { it.scope == TokenAccessScope.REFRESH }
+        require(refreshToken == 1) {
+            "Exactly one REFRESH token type is required, but found $refreshToken in ${tokenClass.simpleName}"
+        }
+
+        val accessTokens = allTokens.count { it.scope == TokenAccessScope.ACCESS }
+        require(accessTokens >= 1) {
+            "At least one ACCESS token type is required, but found $accessTokens in ${tokenClass.simpleName}"
         }
     }
 }

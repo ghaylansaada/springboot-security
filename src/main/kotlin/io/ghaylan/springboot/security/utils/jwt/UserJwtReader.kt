@@ -80,6 +80,7 @@ class UserJwtReader(publicKey : PublicKey)
 			role = claims[JwtUtils.KEY_USER_ROLE]?.toString() ?: return null,
 			name = claims[JwtUtils.KEY_USER_NAME]?.toString(),
 			permissions = getStringListFromClaim(claims, JwtUtils.KEY_USER_PERMISSIONS),
+            tokenType = claims.subject,
 			credentials = null)
 
         for (entry in claims.entries) {

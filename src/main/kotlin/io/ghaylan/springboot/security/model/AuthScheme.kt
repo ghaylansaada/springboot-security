@@ -58,5 +58,7 @@ enum class AuthScheme(val scheme: String)
      *
      * Often used for simple authentication or legacy system compatibility.
      */
-    BASIC(scheme = "Basic")
+    BASIC(scheme = "Basic"),
+
+    NONE(scheme = "None")
 }

@@ -45,6 +45,7 @@ data class RawExtractedAuth(
     val id: String,
     val role: String,
     val name: String?,
+    val tokenType: String?,
     val permissions: List<String>?,
     val credentials: String?,
 ) : HashMap<String, Any?>()

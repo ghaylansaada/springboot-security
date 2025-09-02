@@ -7,6 +7,8 @@ import io.ghaylan.springboot.security.model.AuthScheme
 import io.ghaylan.springboot.security.model.GenericAuthentication
 import io.ghaylan.springboot.security.model.role.RoleAccessPolicy
 import io.ghaylan.springboot.security.model.role.RoleAccessScope
+import io.ghaylan.springboot.security.model.token.TokenAccessPolicy
+import io.ghaylan.springboot.security.model.token.TokenAccessScope
 import io.ghaylan.springboot.security.utils.ReactiveRequestUtils.extractAuthorizationHeader
 import io.ghaylan.springboot.security.utils.ReactiveRequestUtils.extractCredentials
 import io.ghaylan.springboot.security.utils.ReactiveRequestUtils.extractIpAddress
@@ -81,12 +83,12 @@ abstract class AbstractAuthExtractor(val supportedScheme: AuthScheme)
      * @return Complete authentication object with user and request information
      * @throws SecurityViolationException if authentication fails or is missing
      */
-    suspend fun <RoleT, PermissionT> extractAuthenticatedUser(
+    suspend fun <RoleT, PermissionT, TokenT> extractAuthenticatedUser(
         exchange: ServerWebExchange,
         isInternalRequest: Boolean,
-        authDescriptor: AuthDescriptor<*, RoleT, PermissionT>,
+        authDescriptor: AuthDescriptor<*, RoleT, PermissionT, TokenT>,
         rawRequestBody: String?
-    ) : GenericAuthentication<RoleT, PermissionT, GenericAuthentication.User<RoleT, PermissionT>> where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>
+    ) : GenericAuthentication<RoleT, PermissionT, TokenT, GenericAuthentication.User<String, String, RoleT, PermissionT>> where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>, TokenT : Enum<TokenT>, TokenT : TokenAccessPolicy
     {
         val request = exchange.request
 
@@ -116,6 +118,7 @@ abstract class AbstractAuthExtractor(val supportedScheme: AuthScheme)
 
         return GenericAuthentication(
             user = authenticatedUser,
+            tokenType = resolveTokenType(extractedAuth.tokenType, authDescriptor),
             locale = exchange.localeContext.locale ?: Locale.getDefault(),
             header = headerInfo,
             ipAddress = request.extractIpAddress(),
@@ -134,10 +137,10 @@ abstract class AbstractAuthExtractor(val supportedScheme: AuthScheme)
      * @param authDescriptor Project-specific authentication descriptor
      * @return Authentication object representing an anonymous user
      */
-    fun <RoleT, PermissionT> createAnonymousUser(
+    fun <RoleT, PermissionT, TokenT> createAnonymousUser(
         exchange: ServerWebExchange,
-        authDescriptor: AuthDescriptor<*, RoleT, PermissionT>
-    ): GenericAuthentication<RoleT, PermissionT, *> where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>
+        authDescriptor: AuthDescriptor<*, RoleT, PermissionT, TokenT>
+    ): GenericAuthentication<RoleT, PermissionT, *, *> where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>, TokenT : Enum<TokenT>, TokenT : TokenAccessPolicy
     {
         val headerInfo = extractHeaderInfo(exchange.request, null, null)
 
@@ -145,7 +148,10 @@ abstract class AbstractAuthExtractor(val supportedScheme: AuthScheme)
         val publicRole = authDescriptor.allRoles.find { it.scope == RoleAccessScope.PUBLIC }
             ?: error("No PUBLIC role found in ${authDescriptor.roleClass.simpleName}")
 
-        val anonymousUser = GenericAuthentication.User<RoleT, PermissionT>(
+        val accessToken = authDescriptor.allTokens.find { it.scope == TokenAccessScope.ACCESS }
+            ?: error("No ACCESS role found in ${authDescriptor.tokenClass.simpleName}")
+
+        val anonymousUser = GenericAuthentication.User< String, String, RoleT, PermissionT>(
             id = "anonymous",
             role = publicRole,
             permissions = emptySet(),
@@ -153,6 +159,7 @@ abstract class AbstractAuthExtractor(val supportedScheme: AuthScheme)
 
         return GenericAuthentication(
             user = anonymousUser,
+            tokenType = accessToken,
             header = headerInfo,
             ipAddress = exchange.request.extractIpAddress(),
             userAgent = exchange.request.extractUserAgent(),
@@ -191,12 +198,23 @@ abstract class AbstractAuthExtractor(val supportedScheme: AuthScheme)
      */
     private fun <RoleT> resolveUserRole(
         roleString: String?,
-        authDescriptor: AuthDescriptor<*, RoleT, *>
+        authDescriptor: AuthDescriptor<*, RoleT, *, *>
     ): RoleT where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy
     {
         return authDescriptor.allRoles.find {
             it.name == roleString
         } ?: throw SecurityViolationException(HttpStatusCode.UNAUTHORIZED, "Authentication failed: user role is missing or invalid")
+    }
+
+
+    private fun <TokenT> resolveTokenType(
+        typeString: String?,
+        authDescriptor: AuthDescriptor<*, *, *, TokenT>
+    ): TokenT where TokenT : Enum<TokenT>, TokenT : TokenAccessPolicy
+    {
+        return authDescriptor.allTokens.find {
+            it.name == typeString
+        } ?: throw SecurityViolationException(HttpStatusCode.INVALID_TOKEN, "Authentication failed: token type is missing or invalid")
     }
 
 
@@ -209,7 +227,7 @@ abstract class AbstractAuthExtractor(val supportedScheme: AuthScheme)
      */
     private fun <PermissionT> resolvePermissions(
         permissions: List<String>,
-        authDescriptor: AuthDescriptor<*, *, PermissionT>
+        authDescriptor: AuthDescriptor<*, *, PermissionT, *>
     ) : Set<PermissionT> where PermissionT : Enum<PermissionT>
     {
         return authDescriptor.allPermissions.mapNotNull {

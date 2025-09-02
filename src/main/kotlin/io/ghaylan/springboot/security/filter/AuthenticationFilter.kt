@@ -27,6 +27,7 @@ import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.nio.charset.StandardCharsets
+import kotlin.collections.contains
 
 /**
  * # Reactive Authentication Filter for Spring WebFlux
@@ -83,7 +84,7 @@ import java.nio.charset.StandardCharsets
  * @param securityContainer Central security configuration with authentication extractors and schemas
  */
 class AuthenticationFilter(
-    private val securityContainer: SecurityContainer<*, *>
+    private val securityContainer: SecurityContainer<*,*,*>
 ) : WebFilter
 {
 
@@ -123,7 +124,7 @@ class AuthenticationFilter(
     {
         // Phase 1: Resolve endpoint-specific security requirements
         // This lookup determines the authentication strategy and access control policy
-        val securitySchema: SecuritySchema<*, *> = securityContainer.findByRequest(exchange.request)
+        val securitySchema: SecuritySchema<*,*,*> = securityContainer.findByRequest(exchange.request)
             ?: return Mono.error(SecurityViolationException(code = HttpStatusCode.UNAUTHORIZED))
 
         return mono {
@@ -152,7 +153,7 @@ class AuthenticationFilter(
             // Each scope has different security requirements and validation logic
             mutatedExchange to when (securitySchema.accessScope) {
                 RoleAccessScope.PUBLIC -> createAnonymousUser(mutatedExchange)
-                RoleAccessScope.INTERNAL -> createSystemUser(mutatedExchange)
+                RoleAccessScope.INTERNAL -> createSystemUser(mutatedExchange, securitySchema)
                 else -> createAuthenticatedUser(mutatedExchange, securitySchema, cachedBody)
             }
 
@@ -272,9 +273,9 @@ class AuthenticationFilter(
      */
     private suspend fun createAuthenticatedUser(
         exchange: ServerWebExchange,
-        securitySchema: SecuritySchema<*, *>,
+        securitySchema: SecuritySchema<*,*,*>,
         rawRequestBody: ByteArray?
-    ) : GenericAuthentication<*, *, *>
+    ) : GenericAuthentication<*,*,*,*>
     {
         // Step 1: Extract and validate Authorization header presence
         val authorizationHeader = exchange.request.extractAuthorizationHeader()
@@ -286,7 +287,7 @@ class AuthenticationFilter(
         } ?: throw SecurityViolationException(HttpStatusCode.UNAUTHORIZED, "Authentication failed: invalid Authorization header format")
 
         // Step 3: Validate endpoint supports the detected authentication scheme
-        if (!securitySchema.authSchemes.contains(authScheme)) {
+        if (securitySchema.authScheme != authScheme) {
             throw SecurityViolationException(HttpStatusCode.UNAUTHORIZED, "Authentication failed: unsupported authorization method")
         }
 
@@ -302,17 +303,9 @@ class AuthenticationFilter(
             authDescriptor = securityContainer.authDescriptor,
             rawRequestBody = rawRequestBody?.let { String(it, StandardCharsets.UTF_8) })
 
-        // Step 6: Validate user has required role for endpoint access
-        if (securitySchema.roles.isNotEmpty() && authentication.user.role.name !in securitySchema.roles.map { it.name }) {
-            throw SecurityViolationException(HttpStatusCode.FORBIDDEN)
-        }
+        verifySchemaRequirements(authentication, securitySchema)
 
-        // Step 7: Validate permissions matches endpoint requirements (if specified)
-        if (securitySchema.permissions.isNotEmpty() && authentication.user.permissions.none { it in securitySchema.permissions}) {
-            throw SecurityViolationException(HttpStatusCode.FORBIDDEN)
-        }
-
-        // Step 8: Apply rate limiting and session validation policies
+        // Step 9: Apply rate limiting and session validation policies
         checkRateLimitByUser(authentication, securitySchema)
 
         return authentication
@@ -323,18 +316,45 @@ class AuthenticationFilter(
      * Creates system-level authentication for internal endpoints.
      * Uses Bearer token authentication with elevated privileges.
      */
-    private suspend fun createSystemUser(exchange: ServerWebExchange): GenericAuthentication<*, *, *>
+    private suspend fun createSystemUser(
+        exchange: ServerWebExchange,
+        securitySchema: SecuritySchema<*,*,*>
+    ): GenericAuthentication<*,*,*,*>
     {
         // Locate Bearer token extractor for system authentication
-        val extractor = securityContainer.authExtractors.find { it.supportedScheme == AuthScheme.BEARER }
-            ?: throw SecurityViolationException(HttpStatusCode.UNAUTHORIZED, "System authentication failed: Bearer extractor not available")
+        val extractor = securityContainer.authExtractors.find {
+            it.supportedScheme == AuthScheme.BEARER
+        } ?: throw SecurityViolationException(HttpStatusCode.UNAUTHORIZED, "System authentication failed: Bearer extractor not available")
 
         // Perform system-level authentication with internal request flag
-        return extractor.extractAuthenticatedUser(
+        val authentication = extractor.extractAuthenticatedUser(
             exchange = exchange,
             isInternalRequest = true,
             authDescriptor = securityContainer.authDescriptor,
             rawRequestBody = null)
+
+        verifySchemaRequirements(authentication, securitySchema)
+
+        return authentication
+    }
+
+
+    private fun verifySchemaRequirements(authentication: GenericAuthentication<*,*,*,*>, securitySchema: SecuritySchema<*,*,*>)
+    {
+        // Step 6: Validate user has required role for endpoint access
+        if (securitySchema.roles.isNotEmpty() && securitySchema.roles.none { it == authentication.user.role }) {
+            throw SecurityViolationException(HttpStatusCode.FORBIDDEN)
+        }
+
+        // Step 7: Validate permissions matches endpoint requirements (if specified)
+        if (securitySchema.permissions.isNotEmpty() && authentication.user.permissions.none { it in securitySchema.permissions}) {
+            throw SecurityViolationException(HttpStatusCode.FORBIDDEN)
+        }
+
+        // Step /: Validate token type matches endpoint requirements (if specified)
+        if (authentication.tokenType != securitySchema.tokenType) {
+            throw SecurityViolationException(HttpStatusCode.INVALID_TOKEN)
+        }
     }
 
 
@@ -350,7 +370,7 @@ class AuthenticationFilter(
      */
     private fun createAnonymousUser(
         exchange: ServerWebExchange,
-    ) : GenericAuthentication<*, *, *>
+    ) : GenericAuthentication<*,*,*,*>
     {
         // Create anonymous user using first available authentication extractor
         // All extractors must support anonymous user creation for public endpoints
@@ -380,21 +400,18 @@ class AuthenticationFilter(
      * @throws SecurityViolationException When user limits exceeded or session suspended
      */
     private suspend fun checkRateLimitByUser(
-        authentication: GenericAuthentication<*, *, *>,
-        securitySchema: SecuritySchema<*, *>)
+        authentication: GenericAuthentication<*,*,*,*>,
+        securitySchema: SecuritySchema<*,*,*>)
     {
-        // Early exit if rate limiting is not configured or not user-based strategy
-        securityContainer.rateLimitManager ?: return
-
         if (securitySchema.rateLimit?.strategy != RateLimitStrategy.USER) return
 
         // Validate user-specific rate limits using authenticated user ID
-        if (securityContainer.rateLimitManager.isMaxAttemptsReachedByUser(securitySchema, authentication.user.id)) {
+        if (securityContainer.accessControlManager.isMaxAttemptsReachedByUser(securitySchema, authentication.user.id)) {
             throw SecurityViolationException(HttpStatusCode.TOO_MANY_REQUESTS)
         }
 
         // Validate session status and token integrity for authenticated users
-        if (securityContainer.rateLimitManager.isSessionSuspended(userId = authentication.user.id, token = authentication.header.authorization)) {
+        if (securityContainer.accessControlManager.isSessionSuspended(userId = authentication.user.id, token = authentication.header.authorization)) {
             throw SecurityViolationException(HttpStatusCode.EXPIRED_TOKEN)
         }
     }
@@ -425,24 +442,21 @@ class AuthenticationFilter(
      * @throws SecurityViolationException When rate limits exceeded (503 for global, 429 for IP)
      */
     private suspend fun checkRateLimitByIpOrByAll(
-        securitySchema: SecuritySchema<*, *>,
+        securitySchema: SecuritySchema<*,*,*>,
         exchange: ServerWebExchange)
     {
-        // Early exit if rate limiting is not configured
-        securityContainer.rateLimitManager ?: return
-
         // Determine if rate limits have been exceeded based on configured strategy
         val limitReached = when (securitySchema.rateLimit?.strategy) {
 
             RateLimitStrategy.IP -> {
                 val ipAddress = exchange.request.extractIpAddress()
                 // Check if this IP has exceeded its allocated request quota
-                securityContainer.rateLimitManager.isMaxAttemptsReachedByIp(securitySchema, ipAddress)
+                securityContainer.accessControlManager.isMaxAttemptsReachedByIp(securitySchema, ipAddress)
             }
 
             RateLimitStrategy.ALL -> {
                 // Check global system-wide rate limits for all requests
-                securityContainer.rateLimitManager.isMaxAttemptsReachedForAll(securitySchema)
+                securityContainer.accessControlManager.isMaxAttemptsReachedForAll(securitySchema)
             }
 
             else -> {
@@ -481,7 +495,7 @@ class AuthenticationFilter(
      * @param exchange ServerWebExchange to modify with user headers
      * @param authentication Authentication object containing user identification
      */
-    private fun addUserHeadersToResponse(exchange: ServerWebExchange, authentication: GenericAuthentication<*, *, *>)
+    private fun addUserHeadersToResponse(exchange: ServerWebExchange, authentication: GenericAuthentication<*,*,*,*>)
     {
         // Add user identification header for request tracing and audit trails
         exchange.response.headers.add("X-Forwarded-UserId", authentication.user.id)

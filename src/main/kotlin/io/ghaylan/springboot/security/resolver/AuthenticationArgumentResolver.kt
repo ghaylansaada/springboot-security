@@ -62,7 +62,7 @@ import reactor.core.publisher.Mono
  * @param authDescriptor Responsible for mapping generic authentication to project-specific authentication.
  */
 open class AuthenticationArgumentResolver(
-    private val authDescriptor: AuthDescriptor<*, *, *>
+    private val authDescriptor: AuthDescriptor<*,*,*,*>
 ) : HandlerMethodArgumentResolver
 {
 

@@ -58,7 +58,7 @@ import org.springframework.http.server.reactive.ServerHttpRequest
  */
 class BearerAuthExtractor(
     private val userJwtReader : UserJwtReader,
-    private val systemJwtManager: SystemJwtManager<*>
+    private val systemJwtManager: SystemJwtManager<*,*>
 ) : AbstractAuthExtractor(AuthScheme.BEARER)
 {
 

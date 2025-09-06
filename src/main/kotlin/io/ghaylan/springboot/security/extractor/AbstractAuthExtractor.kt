@@ -88,7 +88,7 @@ abstract class AbstractAuthExtractor(val supportedScheme: AuthScheme)
         isInternalRequest: Boolean,
         authDescriptor: AuthDescriptor<*, RoleT, PermissionT, TokenT>,
         rawRequestBody: String?
-    ) : GenericAuthentication<RoleT, PermissionT, TokenT, GenericAuthentication.User<String, String, RoleT, PermissionT>> where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>, TokenT : Enum<TokenT>, TokenT : TokenAccessPolicy
+    ) : GenericAuthentication<RoleT, PermissionT, TokenT, GenericAuthentication.User<RoleT, PermissionT>> where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>, TokenT : Enum<TokenT>, TokenT : TokenAccessPolicy
     {
         val request = exchange.request
 
@@ -151,7 +151,7 @@ abstract class AbstractAuthExtractor(val supportedScheme: AuthScheme)
         val accessToken = authDescriptor.allTokens.find { it.scope == TokenAccessScope.ACCESS }
             ?: error("No ACCESS role found in ${authDescriptor.tokenClass.simpleName}")
 
-        val anonymousUser = GenericAuthentication.User< String, String, RoleT, PermissionT>(
+        val anonymousUser = GenericAuthentication.User<RoleT, PermissionT>(
             id = "anonymous",
             role = publicRole,
             permissions = emptySet(),

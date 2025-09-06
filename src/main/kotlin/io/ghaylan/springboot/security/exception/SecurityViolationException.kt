@@ -49,7 +49,7 @@ enum class HttpStatusCode(val status : HttpStatus, val message : String)
     EXPIRED_TOKEN(status = HttpStatus.UNAUTHORIZED, "Authentication failed: Your session has expired. Please log in again."),
 
     /** Service is temporarily unavailable. Returns HTTP 503 Service Unavailable. */
-    NOT_AVAILABLE(status = HttpStatus.SERVICE_UNAVAILABLE, "Service temporarily unavailable: Please try again later."),
+    SERVICE_UNAVAILABLE(status = HttpStatus.SERVICE_UNAVAILABLE, "Service temporarily unavailable: Please try again later."),
 
     /** Too many requests have been made. Returns HTTP 429 Too Many Requests. */
     TOO_MANY_REQUESTS(status = HttpStatus.TOO_MANY_REQUESTS, "Too many requests: You have exceeded the allowed number of attempts. Please wait and try again.")

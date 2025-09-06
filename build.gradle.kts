@@ -1,6 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
+    id("io.spring.dependency-management") version "1.1.7"
     kotlin("jvm") version "2.2.10"
     `maven-publish`
     `java-library`
@@ -21,17 +22,25 @@ repositories {
 }
 
 dependencies {
-    implementation("org.springframework:spring-webflux:6.2.10")
-    api("org.springframework.security:spring-security-web:6.5.3")
-    api("org.springframework.security:spring-security-config:6.5.3")
-    implementation("org.springframework.boot:spring-boot-autoconfigure:3.5.5")
-    implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive:3.5.5")
+    // Import Spring Boot's dependency versions (BOM)
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:3.5.5"))
 
+    // --- Spring Security ---
+    api("org.springframework.security:spring-security-web")
+    api("org.springframework.security:spring-security-config")
+
+    // --- Spring WebFlux + Boot ---
+    implementation("org.springframework:spring-webflux")
+    implementation("org.springframework.boot:spring-boot-autoconfigure")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
+
+    // --- JWT ---
     implementation("io.jsonwebtoken:jjwt-api:0.13.0")
     implementation("io.jsonwebtoken:jjwt-impl:0.13.0")
     implementation("io.jsonwebtoken:jjwt-jackson:0.13.0")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.10.2")
+    // --- Kotlin coroutines ---
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 }
 
 kotlin {
@@ -40,7 +49,6 @@ kotlin {
         jvmTarget.set(JvmTarget.JVM_21)
         freeCompilerArgs.addAll(
             "-Xjsr305=strict",                       // strict nullability interop
-            "-java-parameters",                      // keep param names for Spring
             "-Xjvm-default=all",                     // faster, cleaner proxies
             "-Xemit-jvm-type-annotations",           // better interop for frameworks
             "-opt-in=kotlin.RequiresOptIn",          // allow experimental APIs

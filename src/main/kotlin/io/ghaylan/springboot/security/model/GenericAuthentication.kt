@@ -37,7 +37,7 @@ import java.util.Locale
  * @property userAgent Optional user agent string from the client.
  * @property datetime Timestamp when authentication was processed.
  */
-open class GenericAuthentication<RoleT, PermissionT, TokenT, UserT: GenericAuthentication.User<String, String, RoleT, PermissionT>>(
+open class GenericAuthentication<RoleT, PermissionT, TokenT, UserT: GenericAuthentication.User<RoleT, PermissionT>>(
     val user: UserT,
     val tokenType: TokenT,
     val locale: Locale,
@@ -58,9 +58,9 @@ open class GenericAuthentication<RoleT, PermissionT, TokenT, UserT: GenericAuthe
      * @property role User's assigned role for authorization checks.
      * @property permissions User's assigned permissions for authorization checks.
      */
-    open class User<IdT, NameT, RoleT, PermissionT>(
-        val id: IdT,
-        val name: NameT?,
+    open class User<RoleT, PermissionT>(
+        val id: String,
+        val name: String?,
         val role: RoleT,
         val permissions: Set<PermissionT>,
     ) : HashMap<String, Any?>() where RoleT : Enum<RoleT>, RoleT : RoleAccessPolicy, PermissionT : Enum<PermissionT>

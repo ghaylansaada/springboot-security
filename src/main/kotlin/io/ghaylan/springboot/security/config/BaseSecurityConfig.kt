@@ -9,7 +9,6 @@ import io.ghaylan.springboot.security.extractor.HmacAuthExtractor
 import io.ghaylan.springboot.security.filter.AccessDeniedHandler
 import io.ghaylan.springboot.security.filter.AuthenticationEntryPoint
 import io.ghaylan.springboot.security.filter.AuthenticationFilter
-import io.ghaylan.springboot.security.model.AuthScheme
 import io.ghaylan.springboot.security.ratelimit.AccessControlManager
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.context.ApplicationContext
@@ -104,18 +103,18 @@ open class BaseSecurityConfig
     open fun securityContainer(
         appContext: ApplicationContext,
         authDescriptor: AuthDescriptor<*,*,*,*>,
-        apiKeyAuthExtractor : Optional<ApiKeyAuthExtractor>,
-        basicAuthExtractor : Optional<BasicAuthExtractor>,
-        bearerAuthExtractor : Optional<BearerAuthExtractor>,
-        hmacAuthExtractor : Optional<HmacAuthExtractor>,
+        apiKeyAuthExtractor : ApiKeyAuthExtractor?,
+        basicAuthExtractor : BasicAuthExtractor?,
+        bearerAuthExtractor : BearerAuthExtractor?,
+        hmacAuthExtractor : HmacAuthExtractor?,
         accessControlManager: AccessControlManager
     ) : SecurityContainer<*,*,*>
     {
         val authExtractors = listOfNotNull(
-            apiKeyAuthExtractor.getOrNull(),
-            basicAuthExtractor.getOrNull(),
-            bearerAuthExtractor.getOrNull(),
-            hmacAuthExtractor.getOrNull())
+            apiKeyAuthExtractor,
+            basicAuthExtractor,
+            bearerAuthExtractor,
+            hmacAuthExtractor)
 
         require(authExtractors.isNotEmpty()) {
             "SecurityContainer requires at least one authentication extractor to operate correctly."

@@ -12,6 +12,7 @@ import io.ghaylan.springboot.security.model.token.TokenAccessPolicy
 import io.ghaylan.springboot.security.model.token.TokenAccessScope
 import io.ghaylan.springboot.security.ratelimit.AccessControlManager
 import io.ghaylan.springboot.security.utils.EndpointsFinder
+import io.ghaylan.springboot.security.utils.getUniqueIdentifier
 import jakarta.annotation.PostConstruct
 import org.apache.commons.logging.LogFactory
 import org.springframework.context.ApplicationContext
@@ -62,14 +63,23 @@ open class SecurityContainer<RoleT, PermissionT, TokenT>(
     @PostConstruct
     private fun initialize()
     {
-         EndpointsFinder.find(appContext) { method, endpoint ->
+        val predefinedSchema = authDescriptor.provideAdditionalSchemas()
 
-             getSecuritySpecs(
-                 method = method,
-                 httpMethod = endpoint.first,
-                 uri = endpoint.second)
+        _schemas.addAll(predefinedSchema)
 
-        }.apply { _schemas.addAll(this) }
+        EndpointsFinder.find(appContext) { method, endpoint ->
+
+            if (predefinedSchema.any { it.method == endpoint.first && matcher.match(it.uri, endpoint.second) })
+            {
+                return@find
+            }
+
+            getSecuritySpecs(
+                method = method,
+                httpMethod = endpoint.first,
+                uri = endpoint.second
+            ).apply { _schemas.add(this) }
+        }
 
         logger.info("SecuritySchemaCache built with ${_schemas.size} secured endpoints")
 
@@ -117,6 +127,7 @@ open class SecurityContainer<RoleT, PermissionT, TokenT>(
             }
 
             return SecuritySchema(
+                id = method.getUniqueIdentifier(),
                 method = httpMethod,
                 uri = uri,
                 authScheme = AuthScheme.BEARER,
@@ -141,6 +152,7 @@ open class SecurityContainer<RoleT, PermissionT, TokenT>(
             }
 
             return SecuritySchema(
+                id = method.getUniqueIdentifier(),
                 method = httpMethod,
                 uri = uri,
                 authScheme = AuthScheme.NONE,
@@ -154,10 +166,14 @@ open class SecurityContainer<RoleT, PermissionT, TokenT>(
         // Process custom security annotations via the AuthDescriptor
         // This allows applications to define their own security annotations
         val authSpecs = authDescriptor.resolveAuthorizationRequirements(
+            method = method,
+            pathMatcher = matcher,
             annotations = method.annotations,
             httpMethod = httpMethod,
             uri = uri
         ).copy(rateLimit = rateLimit)
+
+        if (authSpecs.accessScope == RoleAccessScope.PUBLIC) return authSpecs
 
         require(authSpecs.authScheme != AuthScheme.NONE) {
             "Misconfigured security at $methodSignature. No auth schemes resolved from AuthDescriptor."
@@ -220,7 +236,35 @@ open class SecurityContainer<RoleT, PermissionT, TokenT>(
                 fallback = schema
             }
         }
+
         return fallback
+    }
+
+
+    /**
+     * Finds a security schema by its unique endpoint identifier.
+     *
+     * @param id The endpoint identifier, typically generated using [Method.getUniqueIdentifier].
+     * @return The matching [SecuritySchema] if found, or null if no schema matches the given id.
+     */
+    fun findByMethodId(id: String) : SecuritySchema<*,*,*>?
+    {
+        return schemas.find { it.id == id }
+    }
+
+
+    /**
+     * Finds a security schema for the given Java/Kotlin method.
+     *
+     * The method's unique identifier is generated using [Method.getUniqueIdentifier].
+     *
+     * @param method The method to find the corresponding security schema for.
+     * @return The matching [SecuritySchema] if found, or null if no schema matches the method.
+     */
+    fun findByMethod(method: Method) : SecuritySchema<*,*,*>?
+    {
+        val id = method.getUniqueIdentifier()
+        return schemas.find { it.id == id }
     }
 
 

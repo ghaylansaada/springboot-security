@@ -8,6 +8,8 @@ import io.ghaylan.springboot.security.model.token.TokenAccessPolicy
 import io.ghaylan.springboot.security.model.token.TokenAccessScope
 import io.ghaylan.springboot.security.resolver.AuthenticationArgumentResolver
 import org.springframework.http.HttpMethod
+import org.springframework.util.AntPathMatcher
+import java.lang.reflect.Method
 
 /**
  * Core contract for integrating project-specific authentication and authorization logic.
@@ -93,7 +95,6 @@ abstract class AuthDescriptor<AuthT, RoleT, PermissionT, TokenT>
     val allPermissions: Array<PermissionT> = permissionClass.enumConstants
         ?: error("Permission enum constants are null for ${permissionClass.simpleName}")
 
-
     init
     {
         validateRoleConfiguration()
@@ -159,10 +160,15 @@ abstract class AuthDescriptor<AuthT, RoleT, PermissionT, TokenT>
      * @return A [Pair] of the allowed roles & permissions.
      */
     abstract fun resolveAuthorizationRequirements(
+        method: Method,
+        pathMatcher: AntPathMatcher,
         annotations: Array<Annotation>,
         httpMethod: HttpMethod,
         uri: String,
     ): SecuritySchema<RoleT, PermissionT, TokenT>
+
+
+    open fun provideAdditionalSchemas(): List<SecuritySchema<RoleT, PermissionT, TokenT>> = emptyList()
 
 
     /**

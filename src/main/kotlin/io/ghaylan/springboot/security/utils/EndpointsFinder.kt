@@ -67,7 +67,7 @@ object EndpointsFinder
     {
         val pathParser = PathPatternParser()
 
-        val handlerMapping = appContext.getBean(RequestMappingHandlerMapping::class.java)
+        val handlerMapping: RequestMappingHandlerMapping = appContext.getBean("requestMappingHandlerMapping", RequestMappingHandlerMapping::class.java)
 
         val result = ArrayList<T>(handlerMapping.handlerMethods.size)
 

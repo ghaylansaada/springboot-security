@@ -471,7 +471,7 @@ class AuthenticationFilter(
         if (securitySchema.rateLimit.strategy == RateLimitStrategy.ALL)
         {
             // Global limits exceeded - indicate system unavailability
-            throw SecurityViolationException(HttpStatusCode.NOT_AVAILABLE)
+            throw SecurityViolationException(HttpStatusCode.SERVICE_UNAVAILABLE)
         }
         else {
             // IP-specific limits exceeded - indicate too many requests from client

@@ -6,7 +6,9 @@ import io.ghaylan.springboot.security.ratelimit.RateLimited
 import io.ghaylan.springboot.security.model.role.RoleAccessPolicy
 import io.ghaylan.springboot.security.model.role.RoleAccessScope
 import io.ghaylan.springboot.security.model.token.TokenAccessPolicy
+import io.ghaylan.springboot.security.utils.getUniqueIdentifier
 import org.springframework.http.HttpMethod
+import java.lang.reflect.Method
 
 /**
  * Represents the security configuration for a specific endpoint, defining authentication and authorization requirements.
@@ -34,6 +36,7 @@ import org.springframework.http.HttpMethod
  * @param RoleT Role enumeration implementing [RoleAccessPolicy] for authorization decisions
  * @param PermissionT Permission type enumeration.
  *
+ * @property id Unique identifier for the endpoint, generated using [Method.getUniqueIdentifier].
  * @property method HTTP method (GET, POST, PUT, DELETE, etc.) for endpoint matching
  * @property uri URI pattern for endpoint identification, supports path variables and wildcards
  * @property authScheme Supported authentication schemes (Bearer, Basic, HMAC, ApiKey)
@@ -43,6 +46,7 @@ import org.springframework.http.HttpMethod
  * @property rateLimit Rate limiting configuration, null if no rate limiting applied
  */
 data class SecuritySchema<RoleT, PermissionT, TokenT>(
+    val id: String,
     val method : HttpMethod,
     val uri : String,
     val authScheme : AuthScheme,
